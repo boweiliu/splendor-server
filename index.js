@@ -411,6 +411,7 @@ const main = (req, res) => {
     return res.send(to_ret)
 }
 
+app.get('/favicon.ico', (req, res) => res.sendStatus(404))
 app.post('/:game_id', main)
 app.post('/:game_id/:name', main)
 app.get('/:game_id', main)
