@@ -337,8 +337,17 @@ const main = (req, res) => {
                     }
                     return r.concat([_.sum(out_of_pocket_cost), Math.max(0, _.sum(how_many_gems_short) - game_state.inventory[current_player][5] ) ])
                 })
+                rows = _.map(rows, r => {
+                    let out_of_pocket_cost = Array(5).fill(0)
+                    let how_many_gems_short = Array(5).fill(0)
+                    for (let i = 0; i < 5; i++) {
+                        out_of_pocket_cost[i] = Math.max(0, r[i+1] - game_state.production[other_player][i])
+                        how_many_gems_short[i] = Math.max(0, out_of_pocket_cost[i] - game_state.inventory[other_player][i])
+                    }
+                    return r.concat([_.sum(out_of_pocket_cost), Math.max(0, _.sum(how_many_gems_short) - game_state.inventory[other_player][5] ) ])
+                })
                 rows = _.sortBy(rows, ['8', '9']) // oop cost, then current cost
-                rows.unshift((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides', 'VP', 'Out of pocket cost', 'How many gems short']))
+                rows.unshift((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides', 'VP', 'Out of pocket cost', 'How many gems short', 'Enemy\'s OOPC', 'Enemy\'s HMGS']))
                 body += to_html_table(rows)
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
