@@ -321,18 +321,19 @@ const main = (req, res) => {
             } else if (chr === 'L') {
                 body += 'Sorting market by effective price: <br>'
                 // TODO(bowei): finish this
-                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides', 'VP', 'Num gems needed to spend', 'Available for purchase right now', 'How many gems short']))
                 rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
                 rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
-                //rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
                 rows = _.map(rows, r => {
-                    let cost = 0;
+                    let out_of_pocket_cost = Array(5).fill(0)
+                    let how_many_gems_short = Array(5).fill(0)
                     for (let i = 0; i < 5; i++) {
-                        cost += Math.max(0, r[i+1] - game_state.production[current_player][i])
+                        out_of_pocket_cost[i] = Math.max(0, r[i+1] - game_state.production[current_player][i])
+                        how_many_gems_short[i] = Math.max(0, out_of_pocket_cost[i] - game_state.inventory[current_player][i])
                     }
-                    return r.concat([cost])
+                    return r.concat([_.sum(out_of_pocket_cost), Math.max(0, _.sum(how_many_gems_short) - game_state.inventory[current_player][5] ) ])
                 })
-                rows = _.sortBy(rows, '8')
+                rows = _.sortBy(rows, ['8', '9']) // oop cost, then current cost
+                rows.unshift((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides', 'VP', 'Out of pocket cost', 'How many gems short']))
                 body += to_html_table(rows)
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
