@@ -9,8 +9,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bluebird": "^3.5.2",
     "cookie-parser": "^1.4.3",
     "express": "^4.16.4",
+    "lodash": "^4.17.11",
     "minimist": "^1.2.0",
     "uuid": "^3.3.2"
   }
