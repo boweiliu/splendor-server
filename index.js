@@ -254,7 +254,7 @@ const main = (req, res) => {
                     // add points
                     game_state.points[current_player] += cost[6]
                     // acquire nobles
-                    game_state.nobles.filter(n[5] === '').forEach(n => {
+                    game_state.nobles.filter(n => n[5] === '').forEach(n => {
                         if (_.sum(n.map((required, i) => game_state.production[current_player][i] >= required)) === 5) {
                             n[5] = current_player
                             game_state.points[current_player] += 3
