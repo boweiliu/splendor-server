@@ -81,7 +81,7 @@ const main = (req, res) => {
     console.log({user_id})
 
     let command = (req.body && req.body.command) || ''
-    if (!command) {
+    if (!command || !all_game_states[game_id]) {
         // TODO(bowei): decide if game is in progress or we are just starting a new game
         if (!all_game_states[game_id]) {
             // TODO(bowei): allow to specify through game_id some options of the game.
@@ -112,10 +112,10 @@ const main = (req, res) => {
     }
     // game state and players are guaranteed to have been created at this point
     const game_state = all_game_states[game_id]
-    const current_player = ((players) => {
-        if (players.p1 === user_id) { return 'p1' }
-        else if (players.p2 === user_id) { return 'p2' }
-        else { return 'sp' }
+    const [current_player, other_player] = ((players) => {
+        if (players.p1 === user_id) { return ['p1', 'p2']
+        else if (players.p2 === user_id) { return ['p2', 'p1'] }
+        else { return ['sp', 'sp'] }
     })(game_state.players)
 
     command = command.toUpperCase();
@@ -156,6 +156,7 @@ const main = (req, res) => {
                 rows.push(['B1', 0, 0, 0, 0, 6, 'E', 3])
                 rows.push(['O1', 1, 1, 0, 1, 5, 'W', 1])
                 body += to_html_table(rows)
+                body += ' <br>X1 - X3 are your reserves, O1 - O3 are your opponent\'s.'
             } else if (chr === 'O') {
                 body += 'Opponent\'s inventory: <br>'
                 rows.push((['Opponent']).concat(JEWELS_ROW))
@@ -226,6 +227,7 @@ const main = (req, res) => {
                 // TODO(bowei): draw a new card
             }
             // TODO(bowei): swap the turns
+            game_state.whose_turn = other_player
         }
     } else {
         body += 'Invalid command. Try [h]elp.'
