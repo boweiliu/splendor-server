@@ -75,7 +75,7 @@ const main = (req, res) => {
     } else {
         // generate a unique identifier for this user
         user_id = uuid.v4()
-        res.cookie(COOKIE_NAME, new_userid, { httpOnly: true })
+        res.cookie(COOKIE_NAME, user_id, { httpOnly: true })
     }
     console.log({user_id})
 
