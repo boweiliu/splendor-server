@@ -97,8 +97,8 @@ const main = (req, res) => {
     console.log({user_id})
 
     let command = (req.body && req.body.command) || ''
+    // Default entry screen, if no command was given or if game is not started yet
     if (!command || !all_game_states[game_id]) {
-        // TODO(bowei): decide if game is in progress or we are just starting a new game
         if (!all_game_states[game_id]) {
             // TODO(bowei): allow to specify through game_id some options of the game.
             // e.g. begins with "r" -> you start off as player 2, "p031" -> play until 31 VP, etc.
@@ -112,8 +112,10 @@ const main = (req, res) => {
                 stocks: [ 4, 4, 4, 4, 4, 5 ],
                 decks: JSON.parse(JSON.stringify(CARD_LIST)), // a : stuff, b: stuff, c : stuff, where stuff looks like [qwert, provides, points]
                 market: {},
-                nobles: _.sampleSize(NOBLE_LIST, 5),
-                reserves: { p1: [], p2: [] }
+                nobles: _.map(_.sampleSize(NOBLE_LIST, 5), r => r.concat([''])), // only the available ones this game. 5th col is who it belongs to
+                reserves: { p1: [], p2: [] },
+                purchased: { p1: [], p2: [] },
+                production: { p1: Array(5).fill(0), p2: Array(5).fill(0) }
             }
             // initlize market
             let decks = all_game_states[game_id].decks
@@ -173,16 +175,17 @@ const main = (req, res) => {
                 body += 'Inventory: <br>'
                 rows.push((['You']).concat(JEWELS_ROW))
                 rows.push(['Inventory'].concat(game_state.inventory[current_player]))
-                rows.push(['Buildings',    0, 2, 0, 2, 0, ''])
-                rows.push(['Buying power', 1, 3, 1, 3, 1, 1])
+                rows.push(['Building production'].concat(game_state.production[current_player]))
+                rows.push(['Buying power'].concat(Array(6).fill(0).map((r, i) => game_state.inventory[current_player][i] + ~~game_state.production[current_player][i])))
                 body += to_html_table(rows)
-                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${0} buildings, and ${game_state.reserves[current_player].length} reserves.`
+                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${game_state.purchased[current_player].length} buildings, and ${game_state.reserves[current_player].length} reserves.`
             } else if (chr === 'J') {
                 body += 'Sorting market by jewels: <br>'
                 rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
-                // TODO(bowei): display reserves
-                //console.log(game_state.market)
-                rows = rows.concat(_.sortBy(CARD_KEYS.map(k => [k].concat(game_state.market[k])), r => jewel_to_idx(r[6]) * 10 + r[0] ))
+                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
+                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
+                rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
+                rows = _.sortBy(rows, r => jewel_to_idx(r[6]) * 10 + r[0])
                 body += to_html_table(rows)
             } else if (chr === 'K') {
                 body += 'Chat: <br>'
@@ -193,7 +196,6 @@ const main = (req, res) => {
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
                 rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
-                // TODO(bowei): display reserves
                 //console.log(game_state.market)
                 rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
                 rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
@@ -205,11 +207,10 @@ const main = (req, res) => {
                 body += 'Opponent\'s inventory: <br>'
                 rows.push((['Opponent']).concat(JEWELS_ROW))
                 rows.push(['Inventory'].concat(game_state.inventory[other_player]))
-                // TODO(bowei): implement buildings
-                rows.push(['Buildings',    0, 0, 0, 0, 0, ''])
-                rows.push(['Buying power', 0, 0, 0, 0, 0, 0])
+                rows.push(['Building production'].concat(game_state.production[other_player]))
+                rows.push(['Buying power'].concat(Array(6).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
                 body += to_html_table(rows)
-                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${0} buildings, and ${game_state.reserves[other_player].length} reserves.`
+                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserves.`
 //HIJKLMOPSV
             } else if (chr === 'P') {
                 body += 'Players: <br>'
@@ -217,7 +218,9 @@ const main = (req, res) => {
                     body += 'Waiting for a second player... <br>'
                 } else {
                     body += `You have ${game_state.points[current_player]} points, your opponent has ${game_state.points[other_player]}. <br>`
-                    if (game_state.whose_turn === current_player) {
+                    if (game_state.whose_turn === 'gg') {
+                        body += 'The game is over!'
+                    } else if (game_state.whose_turn === current_player) {
                         body += 'It is currently your turn. '
                     } else {
                         body += 'It is not your turn. '
@@ -232,31 +235,28 @@ const main = (req, res) => {
             } else if (chr === 'V') {
                 body += 'Available and acquired victory points: <br>'
                 rows.push((['']).concat(JEWELS_ROW.slice(0,5)).concat(['Owned by', 'VP']))
-                //rows.push(['', '[Q]uartz', '[W]olframite', '[E]merald', '[R]uby', '[T]urquoise', 'Acquired by', 'VP' ])
-                rows.push(['Noble 1', 3, 3, 0, 0, 3, 'No one', 3])
-                rows.push(['Noble 2', 4, 0, 0, 4, 0, 'You', 3])
-                rows.push(['Noble 3', 4, 0, 0, 0, 4, 'Opponent', 3])
+                console.log('nobles', game_state.nobles)
+                rows = rows.concat(game_state.nobles.map((r,i) => ['Noble ' + (i+1).toString()].concat(r).concat([3])))
+                //rows.push(['Noble 1', 3, 3, 0, 0, 3, 'No one', 3])
+                //rows.push(['Noble 2', 4, 0, 0, 4, 0, 'You', 3])
+                //rows.push(['Noble 3', 4, 0, 0, 0, 4, 'Opponent', 3])
                 body += to_html_table(rows)
             }
             body += ' <br><br>'
         }
-//    } else if (command === '!!!X') {
-//        command = 'H'
-//        body += 'GOD MODE:  my turn again <br>'
-//        game_state.whose_turn = current_player
     } else if (command === 'U') {
         // special case for undo which is tricky
         body += 'Undo command not yet supported.'
     // action commands, tricky stuff
-    } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])$/.test(command)) {
+    } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])(;(HELP|[HIJKLMOPSV]*))?$/.test(command)) {
         let did_succeed_turn = true;
         // DONT't swap turns when we fail a command
         if (game_state.whose_turn !== current_player) {
             body += 'It\'s not your turn!'
-//        } else if (!game_state.players.p2) {
-//            body += 'Needs at least 2 players!'
+        } else if (!game_state.players.p2) {
+            body += 'Needs at least 2 players!'
         } else {
-            if (/^[QWERT-]{2,3}$/.test(command)) {
+            if (/^[QWERT-]{2,3}(;|$)/.test(command)) {
                 if (command.length === 2 && command[0] == command[1]) {
                     if (command.replace('-','').length + _.sum(game_state.inventory[current_player]) > 10) {
                         body += "Can't take that many jewels, inventory too full."
@@ -267,7 +267,7 @@ const main = (req, res) => {
                             game_state.inventory[current_player][jewel_to_idx(command[0])] += 2;
                             game_state.stocks[jewel_to_idx(command[0])] -= 2;
                         } else {
-                            body += 'Cant do that, needs to have at least 4 jewels in that stock.'
+                            body += 'Can\'t do that, needs to have at least 4 jewels in that stock.'
                             did_succeed_turn = false;
                         }
                     }
@@ -279,7 +279,7 @@ const main = (req, res) => {
                         if (command[0] !== '-' && game_state.stocks[jewel_to_idx(command[0])] === 0 ||
                             command[1] !== '-' && game_state.stocks[jewel_to_idx(command[1])] === 0 ||
                             command[2] !== '-' && game_state.stocks[jewel_to_idx(command[2])] === 0) {
-                            body += 'Cant do that, insufficient stocks.'
+                            body += 'Can\'t do that, insufficient stocks.'
                             did_succeed_turn = false;
                         } else {
                             body += `Acquired ${command}.`
@@ -296,20 +296,59 @@ const main = (req, res) => {
                     body += `Unable to parse ${command}. You must take at most 2 gems of the same color, or at most 3 gems of distinct colors. Use '-' to explicitly take fewer gems.`
                     did_succeed_turn = false;
                 }
-            } else if (/^([A-C][1-4]|X[1-3])$/.test(command)) {
+            } else if (/^([A-C][1-4]|X[1-3])(;|$)/.test(command)) {
                 if (command[0] === 'X') {
-                    // TODO(bowei): see if the reserve card exists!
-                    // TODO(bowei): test if you have enough purchasing power
-                    body += `Purchased card ${command} from own reserve.`
-                } else {
-                    // TODO(bowei): test if you have enough purchasing power
-                    body += `Purchased card ${command}.`
+                    if (game_state.reserves[current_player].length < command[1]) {
+                        body += 'That reserve card doesn\'t exist!'
+                        did_succeed_turn = false;
+                    }
                 }
-        
-                // TODO(bowei): draw a new card
-                // TODO(bowei): acquire nobles?
-                // TODO(bowei): is the game over?
-            } else if (/^G[A-C][0-4]$/.test(command)) {
+                let cost = (command[0] === 'X') ? game_state.reserves[current_player][~~command[1]-1] : game_state.market[command]
+                let how_much_we_are_short = Array(5)
+                for (let i = 0 ; i < 5; i++) {
+                    let cost_counting_production = Math.max(0, cost[i] - game_state.production[current_player][i])
+                    how_much_we_are_short[i] = Math.max(0, cost_counting_production - game_state.inventory[current_player][i])
+                }
+                if (_.sum(how_much_we_are_short) > game_state.inventory[current_player][5]) {
+                    body += 'Can\'t buy, not enough to pay!'
+                    did_succeed_turn = false;
+                } else {
+                    // purchase
+                    body += `Purchased card ${command}.`
+                    // put tokens back
+                    game_state.purchased[current_player].push(cost)
+                    for (let i = 0; i < 5; i++) {
+                        let cost_counting_production = Math.max(0, cost[i] - game_state.production[current_player][i])
+                        let new_inventory_value = Math.max(0, game_state.inventory[current_player][i] - cost_counting_production)
+                        let actual_cost = game_state.inventory[current_player][i] - new_inventory_value
+                        game_state.stocks[i] += actual_cost
+                        game_state.inventory[current_player][i] -= actual_cost
+                    }
+                    game_state.inventory[current_player][5] -= _.sum(how_much_we_are_short)
+                    game_state.stocks[5] += _.sum(how_much_we_are_short)
+                    // draw a new card only if was from market
+                    if (command[0] !== 'X') {
+                        game_state.market[command] = game_state.decks[command[0]].pop()
+                    } else { // otherwise remove it from reserves
+                        game_state.reserves[current_player].splice(command[1]-1,1)
+                    }
+                    // increase our production
+                    game_state.production[current_player][jewel_to_idx(cost[5])] += 1
+                    // add points
+                    game_state.victory_points[current_player] += cost[6]
+                    // acquire nobles
+                    game_state.nobles.filter(n[5] === '').forEach(n => {
+                        if (_.sum(n.map((required, i) => game_state.production[current_player][i] >= required)) === 5) {
+                            n[5] = current_player
+                            game_state.victory_points[current_player] += 3
+                        }
+                    })
+                    if (game_state.victory_points[current_player] >= MAX_VICTORY_POINTS) {
+                        body += `Player ${current_player[1]} wins!`
+                        game_state.whose_turn = 'gg'
+                    }
+                }
+            } else if (/^G[A-C][0-4](;|$)/.test(command)) {
                 let card = command.slice(1);
                 if (_.sum(game_state.inventory[current_player]) >= 10) {
                     body += 'Can\'t reserve, inventory too full.'
@@ -324,8 +363,7 @@ const main = (req, res) => {
                     game_state.market[card] = game_state.decks[card[0]].pop()
                 }
             }
-            // TODO(bowei): swap the turns
-            if (did_succeed_turn && false) { // TODO(bowei): remove debug here
+            if (did_succeed_turn) {
                 game_state.whose_turn = other_player
             }
         }
