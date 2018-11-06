@@ -2,8 +2,10 @@
 const express = require('express');
 const argv = require('minimist')(process.argv);
 const cookieParser = require('cookie-parser')
+const uuid = require('uuid')
 
 const port = argv.port || 3000;
+const COOKIE_NAME = 'splendor-server'
 
 const app = express()
 app.use(express.json())
@@ -66,7 +68,16 @@ const main = (req, res) => {
     let game_id = req.params.game_id; // how we keep track of game state
     let body = '' // what to return
     console.log('user agent', req.get('User-Agent')) // used to detect curl
-    console.log('cookies', req.cookies)
+    //console.log('cookies', req.cookies)
+    let user_id
+    if (req.cookies[COOKIE_NAME]) {
+        user_id = req.cookies[COOKIE_NAME]
+    } else {
+        // generate a unique identifier for this user
+        user_id = uuid.v4()
+        res.cookie(COOKIE_NAME, new_userid, { httpOnly: true })
+    }
+    console.log({user_id})
 
     let command = (req.body && req.body.command) || ''
     if (!command) {
