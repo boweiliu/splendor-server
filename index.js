@@ -87,7 +87,12 @@ const main = (req, res) => {
             // TODO(bowei): allow to specify through game_id some options of the game.
             // e.g. begins with "r" -> you start off as player 2, "p031" -> play until 31 VP, etc.
             body += 'New game started! You are player 1.'
-            all_game_states[game_id] = { players: { 'p1': user_id }, whose_turn: 'p1' }
+            // INITIALIZE game state
+            all_game_states[game_id] = { 
+                players: { 'p1': user_id }, 
+                whose_turn: 'p1',
+                points: { p1: 0, p2: 0 }
+            }
         } else {
             // TODO(bowei): allow specifying username through /:game_id/:name endpoint!
             body += 'Game in progress. '
@@ -113,7 +118,7 @@ const main = (req, res) => {
     // game state and players are guaranteed to have been created at this point
     const game_state = all_game_states[game_id]
     const [current_player, other_player] = ((players) => {
-        if (players.p1 === user_id) { return ['p1', 'p2']
+        if (players.p1 === user_id) { return ['p1', 'p2'] }
         else if (players.p2 === user_id) { return ['p2', 'p1'] }
         else { return ['sp', 'sp'] }
     })(game_state.players)
@@ -167,7 +172,17 @@ const main = (req, res) => {
 //HIJKLMOPSV
             } else if (chr === 'P') {
                 body += 'Players: <br>'
-                body += 'It is currently your turn.'
+                if (!game_state.players.p2) {
+                    body += 'Waiting for a second player... <br>'
+                } else {
+                    body += `You have ${game_state.points[current_player]} points, your opponent has ${game_state.points[other_player]}. <br>`
+                    if (game_state.whose_turn === current_player) {
+                        body += 'It is currently your turn. '
+                    } else {
+                        body += 'It is not your turn. '
+                    }
+                    body += `You are player ${current_player === 'p1' ? '1' : '2'}.`
+                }
             } else if (chr === 'S') {
                 body += 'Stocks: <br>'
                 rows.push((['']).concat(JEWELS_ROW))
