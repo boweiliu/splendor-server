@@ -68,6 +68,7 @@ const main = (req, res) => {
     let game_id = req.params.game_id; // how we keep track of game state
     let body = '' // what to return
     console.log('user agent', req.get('User-Agent')) // used to detect curl
+    console.log('remote ip', req.headers['x-forwarded-for'] || req.connection.remoteAddress) // not sure why we would need this
     //console.log('cookies', req.cookies)
     let user_id
     if (req.cookies[COOKIE_NAME]) {
@@ -82,10 +83,41 @@ const main = (req, res) => {
     let command = (req.body && req.body.command) || ''
     if (!command) {
         // TODO(bowei): decide if game is in progress or we are just starting a new game
-        body += 'Game in progress.'
-        body += ' <br><br>'
-        command = 'H'
+        if (!all_game_states[game_id]) {
+            // TODO(bowei): allow to specify through game_id some options of the game.
+            // e.g. begins with "r" -> you start off as player 2, "p031" -> play until 31 VP, etc.
+            body += 'New game started! You are player 1.'
+            all_game_states[game_id] = { players: { 'p1': user_id }, whose_turn: 'p1' }
+        } else {
+            // TODO(bowei): allow specifying username through /:game_id/:name endpoint!
+            body += 'Game in progress. '
+            let players = all_game_states[game_id].players
+            if (players.p1 === user_id) {
+                body += 'You are player 1.'
+            } else {
+                if (!players.p2) {
+                    // insert player
+                    players.p2 = user_id
+                    body += 'Joined! '
+                }
+                if (players.p2 === user_id) {
+                    body += 'You are player 2. '
+                } else {
+                    body += 'You are spectating. '
+                }
+            }
+            body += ' <br><br>'
+            command = 'H'
+        }
     }
+    // game state and players are guaranteed to have been created at this point
+    const game_state = all_game_states[game_id]
+    const current_player = ((players) => {
+        if (players.p1 === user_id) { return 'p1' }
+        else if (players.p2 === user_id) { return 'p2' }
+        else { return 'sp' }
+    })(game_state.players)
+
     command = command.toUpperCase();
     if (command === 'HELP') { command = 'H' }
 
@@ -152,44 +184,52 @@ const main = (req, res) => {
             body += ' <br><br>'
         }
     } else if (command === 'U') {
+        // special case for undo which is tricky
         body += 'Undo command not yet supported.'
-    } else { // action commands, tricky stuff
+    // action commands, tricky stuff
+    } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])$/.test(command)) {
         // TODO(bowei): check if it's our turn!
-        if (/^[QWERT-]{2,3}$/.test(command)) {
-            if (command.length === 2 && command[0] == command[1]) {
-                // TODO(bowei): test if the pile is full!
-                // TODO(bowei): test if your inventory is too full
-                body += `Acquired ${command}.`
-            } else if (command.length === 3 && !/([^-])\1/.test(command) && !/([^-]).\1/.test(command)) {
-                // TODO(bowei): test if the piles are empty!
-                // TODO(bowei): test if your inventory is too full
-                body += `Acquired ${command}.`
-            } else {
-                body += `Unable to parse ${command}. You must take at most 2 gems of the same color, or at most 3 gems of distinct colors. Use '-' to explicitly take fewer gems.`
-            }
-        } else if (/^([A-C][1-4]|X[1-3])$/.test(command)) {
-            command = command.toUpperCase();
-            if (command[0] === 'X') {
-                // TODO(bowei): see if the reserve card exists!
-                // TODO(bowei): test if you have enough purchasing power
-                body += `Purchased card ${command} from own reserve.`
-            } else {
-                // TODO(bowei): test if you have enough purchasing power
-                body += `Purchased card ${command}.`
-            }
-    
-            // TODO(bowei): draw a new card
-            // TODO(bowei): acquire nobles?
-            // TODO(bowei): is the game over?
-        } else if (/^G[A-C][0-4]$/.test(command)) {
-            command = command.toUpperCase().slice(1);
-            // TODO(bowei): test if your inventory is too full
-            // TODO(bowei): test if your reserve slots are full
-            body += `Reserved card ${command} to slot X1.`
-            // TODO(bowei): draw a new card
+        if (game_state.whose_turn !== current_player) {
+            body += 'It\'s not your turn!'
+            // DONT't swap turns
         } else {
-            body += 'Invalid command. Try [h]elp.'
+            if (/^[QWERT-]{2,3}$/.test(command)) {
+                if (command.length === 2 && command[0] == command[1]) {
+                    // TODO(bowei): test if the pile is full!
+                    // TODO(bowei): test if your inventory is too full
+                    body += `Acquired ${command}.`
+                } else if (command.length === 3 && !/([^-])\1/.test(command) && !/([^-]).\1/.test(command)) {
+                    // TODO(bowei): test if the piles are empty!
+                    // TODO(bowei): test if your inventory is too full
+                    body += `Acquired ${command}.`
+                } else {
+                    body += `Unable to parse ${command}. You must take at most 2 gems of the same color, or at most 3 gems of distinct colors. Use '-' to explicitly take fewer gems.`
+                }
+            } else if (/^([A-C][1-4]|X[1-3])$/.test(command)) {
+                if (command[0] === 'X') {
+                    // TODO(bowei): see if the reserve card exists!
+                    // TODO(bowei): test if you have enough purchasing power
+                    body += `Purchased card ${command} from own reserve.`
+                } else {
+                    // TODO(bowei): test if you have enough purchasing power
+                    body += `Purchased card ${command}.`
+                }
+        
+                // TODO(bowei): draw a new card
+                // TODO(bowei): acquire nobles?
+                // TODO(bowei): is the game over?
+            } else if (/^G[A-C][0-4]$/.test(command)) {
+                let card = command.slice(1);
+                // TODO(bowei): test if your inventory is too full
+                // TODO(bowei): test if your reserve slots are full
+                body += `Reserved card ${command} to slot X1.`
+                // TODO(bowei): draw a new card
+            }
+            // TODO(bowei): swap the turns
         }
+    } else {
+        body += 'Invalid command. Try [h]elp.'
+        command = 'H'
     }
 
     let to_ret = INDEX_STRING
@@ -200,6 +240,7 @@ const main = (req, res) => {
 }
 
 app.post('/:game_id', main)
+app.post('/:game_id/:name', main)
 app.get('/:game_id', main)
 /*
 app.get('/api/poll/:game_id', (req, res) => {
