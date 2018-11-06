@@ -319,19 +319,20 @@ const main = (req, res) => {
                 body += 'Chat: <br>'
                 body += 'Not yet supported.'
             } else if (chr === 'L') {
-                body += 'Sorting market by price: <br>'
+                body += 'Sorting market by effective price: <br>'
                 // TODO(bowei): finish this
-                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
+                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides', 'VP', 'Num gems needed to spend', 'Available for purchase right now', 'How many gems short']))
                 rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
                 rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
                 //rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
                 rows = _.map(rows, r => {
                     let cost = 0;
                     for (let i = 0; i < 5; i++) {
-                        cost += Math.max(0, r[i] - game_state.production[current_player][i])
+                        cost += Math.max(0, r[i+1] - game_state.production[current_player][i])
                     }
-                    return cost
+                    return r.concat([cost])
                 })
+                rows = _.sortBy(rows, '8')
                 body += to_html_table(rows)
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
