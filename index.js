@@ -320,8 +320,19 @@ const main = (req, res) => {
                 body += 'Not yet supported.'
             } else if (chr === 'L') {
                 body += 'Sorting market by price: <br>'
-                // TODO(bowei): implement this!
-                body += 'Not yet supported.'
+                // TODO(bowei): finish this
+                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
+                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
+                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
+                //rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
+                rows = _.map(rows, r => {
+                    let cost = 0;
+                    for (let i = 0; i < 5; i++) {
+                        cost += Math.max(0, r[i] - game_state.production[current_player][i])
+                    }
+                    return cost
+                })
+                body += to_html_table(rows)
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
                 rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
@@ -363,12 +374,9 @@ const main = (req, res) => {
                 body += to_html_table(rows)
             } else if (chr === 'V') {
                 body += 'Available and acquired victory points: <br>'
+                // TODO(bowei): finish this, need to add it market stuff
                 rows.push((['']).concat(JEWELS_ROW.slice(0,5)).concat(['Owned by', 'VP']))
-                //console.log('nobles', game_state.nobles)
                 rows = rows.concat(game_state.nobles.map((r,i) => ['Noble ' + (i+1).toString()].concat(r).concat([3])))
-                //rows.push(['Noble 1', 3, 3, 0, 0, 3, 'No one', 3])
-                //rows.push(['Noble 2', 4, 0, 0, 4, 0, 'You', 3])
-                //rows.push(['Noble 3', 4, 0, 0, 0, 4, 'Opponent', 3])
                 body += to_html_table(rows)
             }
             body += ' <br><br>'
