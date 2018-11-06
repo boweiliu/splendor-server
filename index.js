@@ -353,7 +353,7 @@ const main = (req, res) => {
                 rows.push((['Opponent']).concat(JEWELS_ROW))
                 rows.push(['Inventory'].concat(game_state.inventory[other_player]))
                 rows.push(['Building production'].concat(game_state.production[other_player]))
-                rows.push(['Buying power'].concat(Array(6).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
+                rows.push(['Buying power'].concat(Array(6).fill(0).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
                 body += to_html_table(rows)
                 body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserved cards.`
             } else if (chr === 'P') {
