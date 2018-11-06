@@ -1,13 +1,14 @@
 'use strict'
 const express = require('express');
 const argv = require('minimist')(process.argv);
+const cookieParser = require('cookie-parser')
 
 const port = argv.port || 3000;
-
 
 const app = express()
 app.use(express.json())
 app.use(express.urlencoded())
+app.use(cookieParser())
 
 const INDEX_STRING = 
 `
@@ -59,10 +60,14 @@ const to_html_table = (rows) => {
     return '<table> ' + rows.map(row => '<tr> ' + row.map(x => `<th> ${x} </th>`).join(' ') + ' </tr> ').join(' ') + ' </table>'
 }
 
+const all_game_states = {}
+
 const main = (req, res) => {
     let game_id = req.params.game_id; // how we keep track of game state
     let body = '' // what to return
-    //console.log('user agent', req.get('User-Agent')) // used to detect curl
+    console.log('user agent', req.get('User-Agent')) // used to detect curl
+    console.log('cookies', req.cookies)
+
     let command = (req.body && req.body.command) || ''
     if (!command) {
         // TODO(bowei): decide if game is in progress or we are just starting a new game
@@ -177,7 +182,7 @@ const main = (req, res) => {
     }
 
     let to_ret = INDEX_STRING
-    to_ret = to_ret.replace('__GAME_ID__', req.params.game_id)
+    to_ret = to_ret.replace('__GAME_ID__', game_id)
     to_ret = to_ret.replace('__BODY__', body)
     to_ret = to_ret.replace('__COMMAND__', command)
     return res.send(to_ret)
