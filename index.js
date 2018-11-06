@@ -57,10 +57,20 @@ const HELP_TABLE = (() => {
 const SHOW_COMMANDS_REGEX = /^(HELP|[HIJKLMOPSV]*)$/
 //HIJLMOPSV
 const JEWELS_ROW = ['[Q]uartz', '[W]olframite', '[E]merald', '[R]uby', '[T]urquoise', '[G]old' ]
+const jewel_to_idx = (ch) => {
+    if (ch === 'Q') { return 0 }
+    if (ch === 'W') { return 1 }
+    if (ch === 'E') { return 2 }
+    if (ch === 'R') { return 3 }
+    if (ch === 'T') { return 4 }
+    if (ch === 'G') { return 5 }
+    return null;
+}
 
 const to_html_table = (rows) => {
     return '<table> ' + rows.map(row => '<tr> ' + row.map(x => `<th> ${x} </th>`).join(' ') + ' </tr> ').join(' ') + ' </table>'
 }
+
 
 const all_game_states = {}
 
@@ -86,12 +96,14 @@ const main = (req, res) => {
         if (!all_game_states[game_id]) {
             // TODO(bowei): allow to specify through game_id some options of the game.
             // e.g. begins with "r" -> you start off as player 2, "p031" -> play until 31 VP, etc.
-            body += 'New game started! You are player 1.'
+            body += 'New game started! You are player 1. <br>'
             // INITIALIZE game state
             all_game_states[game_id] = { 
                 players: { 'p1': user_id }, 
                 whose_turn: 'p1',
-                points: { p1: 0, p2: 0 }
+                points: { p1: 0, p2: 0 },
+                inventory: { p1: [0, 0, 0, 0, 0, 0], p2: [0, 0, 0, 0, 0, 0] },
+                stocks: [ 4, 4, 4, 4, 4, 5 ]
             }
         } else {
             // TODO(bowei): allow specifying username through /:game_id/:name endpoint!
@@ -139,7 +151,7 @@ const main = (req, res) => {
             } else if (chr === 'I') {
                 body += 'Inventory: <br>'
                 rows.push((['You']).concat(JEWELS_ROW))
-                rows.push(['Inventory',    1, 1, 1, 1, 1, 1])
+                rows.push(['Inventory'].concat(game_state.inventory[current_player]))
                 rows.push(['Buildings',    0, 2, 0, 2, 0, ''])
                 rows.push(['Buying power', 1, 3, 1, 3, 1, 1])
                 body += to_html_table(rows)
@@ -165,7 +177,7 @@ const main = (req, res) => {
             } else if (chr === 'O') {
                 body += 'Opponent\'s inventory: <br>'
                 rows.push((['Opponent']).concat(JEWELS_ROW))
-                rows.push(['Inventory',    0, 0, 0, 0, 0, 0])
+                rows.push(['Inventory'].concat(game_state.inventory[other_player]))
                 rows.push(['Buildings',    0, 0, 0, 0, 0, ''])
                 rows.push(['Buying power', 0, 0, 0, 0, 0, 0])
                 body += to_html_table(rows)
@@ -186,7 +198,7 @@ const main = (req, res) => {
             } else if (chr === 'S') {
                 body += 'Stocks: <br>'
                 rows.push((['']).concat(JEWELS_ROW))
-                rows.push(['Stocks',  8, 3, 2, 2, 0, 0])
+                rows.push(['Stocks'].concat(game_state.stocks))
                 body += to_html_table(rows)
             } else if (chr === 'V') {
                 body += 'Available and acquired victory points: <br>'
@@ -199,12 +211,16 @@ const main = (req, res) => {
             }
             body += ' <br><br>'
         }
+    } else if (command === '!!!X') {
+        command = 'H'
+        body += 'GOD MODE:  my turn again <br>'
+        game_state.whose_turn = current_player
     } else if (command === 'U') {
         // special case for undo which is tricky
         body += 'Undo command not yet supported.'
     // action commands, tricky stuff
     } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])$/.test(command)) {
-        // TODO(bowei): check if it's our turn!
+        let did_succeed_turn = true;
         if (game_state.whose_turn !== current_player) {
             body += 'It\'s not your turn!'
             // DONT't swap turns
@@ -213,13 +229,53 @@ const main = (req, res) => {
                 if (command.length === 2 && command[0] == command[1]) {
                     // TODO(bowei): test if the pile is full!
                     // TODO(bowei): test if your inventory is too full
-                    body += `Acquired ${command}.`
+                    let total = 0
+                    for (let i = 0; i < 6; i++) {
+                        total += game_state.inventory[current_player][i]
+                    }
+                    if (command.replace('-','').length + total > 10) {
+                        body += "Can't take that many jewels, inventory too full."
+                        did_succeed_turn = false;
+                    } else {
+                        if (command[0] !== '-' && game_state.stocks[jewel_to_idx(command[0])] === 4) {
+                            body += `Acquired ${command}.`
+                            game_state.inventory[current_player][jewel_to_idx(command[0])] += 2;
+                            game_state.stocks[jewel_to_idx(command[0])] -= 2;
+                        } else {
+                            body += 'Cant do that, needs to have at least 4 jewels in that stock.'
+                            did_succeed_turn = false;
+                        }
+                    }
                 } else if (command.length === 3 && !/([^-])\1/.test(command) && !/([^-]).\1/.test(command)) {
                     // TODO(bowei): test if the piles are empty!
                     // TODO(bowei): test if your inventory is too full
-                    body += `Acquired ${command}.`
+                    let total = 0
+                    for (let i = 0; i < 6; i++) {
+                        total += game_state.inventory[current_player][i]
+                    }
+                    if (command.replace('-','').length + total > 10) {
+                        body += "Can't take that many jewels, inventory too full."
+                        did_succeed_turn = false;
+                    } else {
+                        if (command[0] !== '-' && game_state.stocks[jewel_to_idx(command[0])] === 0 ||
+                            command[1] !== '-' && game_state.stocks[jewel_to_idx(command[1])] === 0 ||
+                            command[2] !== '-' && game_state.stocks[jewel_to_idx(command[2])] === 0) {
+                            body += 'Cant do that, insufficient stocks.'
+                            did_succeed_turn = false;
+                        } else {
+                            body += `Acquired ${command}.`
+                            // ignore '-', the array will store some undefined but we dont care
+                            game_state.inventory[current_player][jewel_to_idx(command[0])] += 1;
+                            game_state.stocks[jewel_to_idx(command[0])] -= 1;
+                            game_state.inventory[current_player][jewel_to_idx(command[1])] += 1;
+                            game_state.inventory[current_player][jewel_to_idx(command[2])] += 1;
+                            game_state.stocks[jewel_to_idx(command[1])] -= 1;
+                            game_state.stocks[jewel_to_idx(command[2])] -= 1;
+                        }
+                    }
                 } else {
                     body += `Unable to parse ${command}. You must take at most 2 gems of the same color, or at most 3 gems of distinct colors. Use '-' to explicitly take fewer gems.`
+                    did_succeed_turn = false;
                 }
             } else if (/^([A-C][1-4]|X[1-3])$/.test(command)) {
                 if (command[0] === 'X') {
@@ -242,7 +298,9 @@ const main = (req, res) => {
                 // TODO(bowei): draw a new card
             }
             // TODO(bowei): swap the turns
-            game_state.whose_turn = other_player
+            if (did_succeed_turn) {
+                game_state.whose_turn = other_player
+            }
         }
     } else {
         body += 'Invalid command. Try [h]elp.'
