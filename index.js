@@ -98,6 +98,7 @@ const main = (req, res) => {
     console.log({user_id})
 
     let command = (req.body && req.body.command) || ''
+    console.log({ game_id, command })
     // Default entry screen, if no command was given or if game is not started yet
     if (!command || !all_game_states[game_id]) {
         if (!all_game_states[game_id]) {
@@ -113,7 +114,7 @@ const main = (req, res) => {
                 stocks: [ 4, 4, 4, 4, 4, 5 ],
                 decks: JSON.parse(JSON.stringify(CARD_LIST)), // a : stuff, b: stuff, c : stuff, where stuff looks like [qwert, provides, points]
                 market: {},
-                nobles: _.map(_.sampleSize(NOBLE_LIST, 5), r => r.concat([''])), // only the available ones this game. 5th col is who it belongs to
+                nobles: _.map(_.sampleSize(NOBLE_LIST, 3), r => r.concat([''])), // only the available ones this game. 5th col is who it belongs to
                 reserves: { p1: [], p2: [] },
                 purchased: { p1: [], p2: [] },
                 production: { p1: Array(5).fill(0), p2: Array(5).fill(0) }
@@ -274,9 +275,14 @@ const main = (req, res) => {
                     did_succeed_turn = false
                 } else {
                     body += `Reserved card ${card} to slot X${game_state.reserves[current_player].length + 1}.`
-                    game_state.reserves[current_player].push(game_state.market[card])
+                    if (card[0] === '0') {
+                        game_state.reserves[current_player].push(game_state.decks[card[0]].pop())
+                    } else {
+                        game_state.reserves[current_player].push(game_state.market[card])
+                        game_state.market[card] = game_state.decks[card[0]].pop()
+                    }
                     game_state.inventory[current_player][5] += 1
-                    game_state.market[card] = game_state.decks[card[0]].pop()
+                    game_state.stocks[5] -= 1
                 }
             }
             if (did_succeed_turn) {
@@ -306,7 +312,7 @@ const main = (req, res) => {
                 rows.push(['Building production'].concat(game_state.production[current_player]))
                 rows.push(['Buying power'].concat(Array(6).fill(0).map((r, i) => game_state.inventory[current_player][i] + ~~game_state.production[current_player][i])))
                 body += to_html_table(rows)
-                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${game_state.purchased[current_player].length} buildings, and ${game_state.reserves[current_player].length} reserves.`
+                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${game_state.purchased[current_player].length} buildings, and ${game_state.reserves[current_player].length} reserved cards.`
             } else if (chr === 'J') {
                 body += 'Sorting market by jewels: <br>'
                 rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
@@ -320,7 +326,6 @@ const main = (req, res) => {
                 body += 'Not yet supported.'
             } else if (chr === 'L') {
                 body += 'Sorting market by effective price: <br>'
-                // TODO(bowei): finish this
                 rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
                 rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
                 rows = _.map(rows, r => {
@@ -338,11 +343,9 @@ const main = (req, res) => {
             } else if (chr === 'M') {
                 body += 'Cards available on the market: <br>'
                 rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
-                //console.log(game_state.market)
                 rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
                 rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
                 rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
-                //rows.push(['X1', 1, 1, 0, 1, 2, 'Q', 0])
                 body += to_html_table(rows)
                 body += ' <br>X1 - X3 are your reserves, O1 - O3 are your opponent\'s.'
             } else if (chr === 'O') {
@@ -352,8 +355,7 @@ const main = (req, res) => {
                 rows.push(['Building production'].concat(game_state.production[other_player]))
                 rows.push(['Buying power'].concat(Array(6).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
                 body += to_html_table(rows)
-                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserves.`
-//HIJKLMOPSV
+                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserved cards.`
             } else if (chr === 'P') {
                 body += 'Players: <br>'
                 if (!game_state.players.p2) {
@@ -376,9 +378,17 @@ const main = (req, res) => {
                 body += to_html_table(rows)
             } else if (chr === 'V') {
                 body += 'Available and acquired victory points: <br>'
-                // TODO(bowei): finish this, need to add it market stuff
                 rows.push((['']).concat(JEWELS_ROW.slice(0,5)).concat(['Owned by', 'VP']))
+                // TODO(bowei): filter owned nobles to the bottom
                 rows = rows.concat(game_state.nobles.map((r,i) => ['Noble ' + (i+1).toString()].concat(r).concat([3])))
+                let to_concat = CARD_KEYS.map(k => [k].concat(game_state.market[k]))
+                to_concat = to_concat.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
+                to_concat = _(to_concat).filter(r => r[7] > 0).map(r => {
+                    r[6] = ''
+                    return r
+                }).sortBy('7').reverse().value()
+                rows = rows.concat(to_concat)
+                // TODO(bowei): also add owned buildings with point values
                 body += to_html_table(rows)
             }
             body += ' <br><br>'
