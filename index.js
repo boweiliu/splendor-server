@@ -52,6 +52,7 @@ const HELP_TABLE = (() => {
     //rows.push(['Wait until your turn', 'z'])
     rows.push(['Show which [p]layer\'s turn it is', 'p']) // or this should be the default
     rows.push(['(Show commands can be combined)', ''])
+    rows.push(['(Actions can also be followed by a semicolon and any number of show commands)', ''])
     rows.push(['Send a message to your opponent', '<code>k(.*)</code>'])
     return rows
 })()
@@ -160,96 +161,10 @@ const main = (req, res) => {
 
     command = command.toUpperCase();
     if (command === 'HELP') { command = 'H' }
+    let original_command = command;
 
-    if (SHOW_COMMANDS_REGEX.test(command)) {
-        // Build up the information messages slowly
-        for (let i = 0; i < command.length; i++) {
-            let chr = command[i];
-            let rows = [];
-
-            if (chr === 'H') {
-                body += 'Commands: <br>'
-                body += to_html_table(HELP_TABLE)
-                body += 'Recommended to use shift-tab + enter to easily enter input.'
-            } else if (chr === 'I') {
-                body += 'Inventory: <br>'
-                rows.push((['You']).concat(JEWELS_ROW))
-                rows.push(['Inventory'].concat(game_state.inventory[current_player]))
-                rows.push(['Building production'].concat(game_state.production[current_player]))
-                rows.push(['Buying power'].concat(Array(6).fill(0).map((r, i) => game_state.inventory[current_player][i] + ~~game_state.production[current_player][i])))
-                body += to_html_table(rows)
-                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${game_state.purchased[current_player].length} buildings, and ${game_state.reserves[current_player].length} reserves.`
-            } else if (chr === 'J') {
-                body += 'Sorting market by jewels: <br>'
-                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
-                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
-                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
-                rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
-                rows = _.sortBy(rows, r => jewel_to_idx(r[6]) * 10 + r[0])
-                body += to_html_table(rows)
-            } else if (chr === 'K') {
-                body += 'Chat: <br>'
-                body += 'Not yet supported.'
-            } else if (chr === 'L') {
-                body += 'Sorting market by price: <br>'
-                // TODO(bowei): implement this!
-                body += 'Not yet supported.'
-            } else if (chr === 'M') {
-                body += 'Cards available on the market: <br>'
-                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
-                //console.log(game_state.market)
-                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
-                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
-                rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
-                //rows.push(['X1', 1, 1, 0, 1, 2, 'Q', 0])
-                body += to_html_table(rows)
-                body += ' <br>X1 - X3 are your reserves, O1 - O3 are your opponent\'s.'
-            } else if (chr === 'O') {
-                body += 'Opponent\'s inventory: <br>'
-                rows.push((['Opponent']).concat(JEWELS_ROW))
-                rows.push(['Inventory'].concat(game_state.inventory[other_player]))
-                rows.push(['Building production'].concat(game_state.production[other_player]))
-                rows.push(['Buying power'].concat(Array(6).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
-                body += to_html_table(rows)
-                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserves.`
-//HIJKLMOPSV
-            } else if (chr === 'P') {
-                body += 'Players: <br>'
-                if (!game_state.players.p2) {
-                    body += 'Waiting for a second player... <br>'
-                } else {
-                    body += `You have ${game_state.points[current_player]} points, your opponent has ${game_state.points[other_player]}. <br>`
-                    if (game_state.whose_turn === 'gg') {
-                        body += 'The game is over!'
-                    } else if (game_state.whose_turn === current_player) {
-                        body += 'It is currently your turn. '
-                    } else {
-                        body += 'It is not your turn. '
-                    }
-                    body += `You are player ${current_player === 'p1' ? '1' : '2'}.`
-                }
-            } else if (chr === 'S') {
-                body += 'Stocks: <br>'
-                rows.push((['']).concat(JEWELS_ROW))
-                rows.push(['Stocks'].concat(game_state.stocks))
-                body += to_html_table(rows)
-            } else if (chr === 'V') {
-                body += 'Available and acquired victory points: <br>'
-                rows.push((['']).concat(JEWELS_ROW.slice(0,5)).concat(['Owned by', 'VP']))
-                console.log('nobles', game_state.nobles)
-                rows = rows.concat(game_state.nobles.map((r,i) => ['Noble ' + (i+1).toString()].concat(r).concat([3])))
-                //rows.push(['Noble 1', 3, 3, 0, 0, 3, 'No one', 3])
-                //rows.push(['Noble 2', 4, 0, 0, 4, 0, 'You', 3])
-                //rows.push(['Noble 3', 4, 0, 0, 0, 4, 'Opponent', 3])
-                body += to_html_table(rows)
-            }
-            body += ' <br><br>'
-        }
-    } else if (command === 'U') {
-        // special case for undo which is tricky
-        body += 'Undo command not yet supported.'
-    // action commands, tricky stuff
-    } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])(;(HELP|[HIJKLMOPSV]*))?$/.test(command)) {
+    if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])(;(HELP|[HIJKLMOPSV]*))?$/.test(command)) {
+        command = command.split(';')[0]
         let did_succeed_turn = true;
         // DONT't swap turns when we fail a command
         if (game_state.whose_turn !== current_player) {
@@ -368,6 +283,102 @@ const main = (req, res) => {
                 game_state.whose_turn = other_player
             }
         }
+    } else if (!SHOW_COMMANDS_REGEX.test(command)) {
+        body += 'Invalid command before the semicolon.'
+    }
+
+    command = original_command.split(';').pop()
+    body += ' <br> '
+    if (SHOW_COMMANDS_REGEX.test(command)) {
+        // Build up the information messages slowly
+        for (let i = 0; i < command.length; i++) {
+            let chr = command[i];
+            let rows = [];
+
+            if (chr === 'H') {
+                body += 'Commands: <br>'
+                body += to_html_table(HELP_TABLE)
+                body += 'Recommended to use shift-tab + enter to easily enter input.'
+            } else if (chr === 'I') {
+                body += 'Inventory: <br>'
+                rows.push((['You']).concat(JEWELS_ROW))
+                rows.push(['Inventory'].concat(game_state.inventory[current_player]))
+                rows.push(['Building production'].concat(game_state.production[current_player]))
+                rows.push(['Buying power'].concat(Array(6).fill(0).map((r, i) => game_state.inventory[current_player][i] + ~~game_state.production[current_player][i])))
+                body += to_html_table(rows)
+                body += `<br>You have a total of ${_.sum(game_state.inventory[current_player])} jewels, ${game_state.purchased[current_player].length} buildings, and ${game_state.reserves[current_player].length} reserves.`
+            } else if (chr === 'J') {
+                body += 'Sorting market by jewels: <br>'
+                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
+                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
+                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
+                rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
+                rows = _.sortBy(rows, r => jewel_to_idx(r[6]) * 10 + r[0])
+                body += to_html_table(rows)
+            } else if (chr === 'K') {
+                body += 'Chat: <br>'
+                body += 'Not yet supported.'
+            } else if (chr === 'L') {
+                body += 'Sorting market by price: <br>'
+                // TODO(bowei): implement this!
+                body += 'Not yet supported.'
+            } else if (chr === 'M') {
+                body += 'Cards available on the market: <br>'
+                rows.push((['Card ID']).concat(JEWELS_ROW.slice(0,5)).concat(['Provides'], ['VP']))
+                //console.log(game_state.market)
+                rows = rows.concat(CARD_KEYS.map(k => [k].concat(game_state.market[k])))
+                rows = rows.concat(game_state.reserves[current_player].map((r, i) => ['X' + (i+1).toString()].concat(r)))
+                rows = rows.concat(game_state.reserves[other_player].map((r, i) => ['O' + (i+1).toString()].concat(r)))
+                //rows.push(['X1', 1, 1, 0, 1, 2, 'Q', 0])
+                body += to_html_table(rows)
+                body += ' <br>X1 - X3 are your reserves, O1 - O3 are your opponent\'s.'
+            } else if (chr === 'O') {
+                body += 'Opponent\'s inventory: <br>'
+                rows.push((['Opponent']).concat(JEWELS_ROW))
+                rows.push(['Inventory'].concat(game_state.inventory[other_player]))
+                rows.push(['Building production'].concat(game_state.production[other_player]))
+                rows.push(['Buying power'].concat(Array(6).map((r, i) => game_state.inventory[other_player][i] + ~~game_state.production[other_player][i])))
+                body += to_html_table(rows)
+                body += `<br>Opponent has a total of ${_.sum(game_state.inventory[other_player])} jewels, ${game_state.purchased[other_player].length} buildings, and ${game_state.reserves[other_player].length} reserves.`
+//HIJKLMOPSV
+            } else if (chr === 'P') {
+                body += 'Players: <br>'
+                if (!game_state.players.p2) {
+                    body += 'Waiting for a second player... <br>'
+                } else {
+                    body += `You have ${game_state.points[current_player]} points, your opponent has ${game_state.points[other_player]}. <br>`
+                    if (game_state.whose_turn === 'gg') {
+                        body += 'The game is over!'
+                    } else if (game_state.whose_turn === current_player) {
+                        body += 'It is currently your turn. '
+                    } else {
+                        body += 'It is not your turn. '
+                    }
+                    body += `You are player ${current_player === 'p1' ? '1' : '2'}.`
+                }
+            } else if (chr === 'S') {
+                body += 'Stocks: <br>'
+                rows.push((['']).concat(JEWELS_ROW))
+                rows.push(['Stocks'].concat(game_state.stocks))
+                body += to_html_table(rows)
+            } else if (chr === 'V') {
+                body += 'Available and acquired victory points: <br>'
+                rows.push((['']).concat(JEWELS_ROW.slice(0,5)).concat(['Owned by', 'VP']))
+                //console.log('nobles', game_state.nobles)
+                rows = rows.concat(game_state.nobles.map((r,i) => ['Noble ' + (i+1).toString()].concat(r).concat([3])))
+                //rows.push(['Noble 1', 3, 3, 0, 0, 3, 'No one', 3])
+                //rows.push(['Noble 2', 4, 0, 0, 4, 0, 'You', 3])
+                //rows.push(['Noble 3', 4, 0, 0, 0, 4, 'Opponent', 3])
+                body += to_html_table(rows)
+            }
+            body += ' <br><br>'
+        }
+    } else if (command === 'U') {
+        // special case for undo which is tricky
+        body += 'Undo command not yet supported.'
+    // action commands, tricky stuff
+    } else if (original_command.indexOf(';') === -1) {
+        // do nothing
     } else {
         body += 'Invalid command. Try [h]elp.'
         command = 'H'
