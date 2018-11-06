@@ -71,6 +71,8 @@ const to_html_table = (rows) => {
     return '<table> ' + rows.map(row => '<tr> ' + row.map(x => `<th> ${x} </th>`).join(' ') + ' </tr> ').join(' ') + ' </table>'
 }
 
+// TODO(bowei): permute the card list to be canonical. Currently the costs are in the order BWRGB and the resources by black blue green red white (that's what the card list pdf gives).
+const card_list = JSON.parse('./card_table.json')
 
 const all_game_states = {}
 
@@ -104,7 +106,10 @@ const main = (req, res) => {
                 points: { p1: 0, p2: 0 },
                 inventory: { p1: [0, 0, 0, 0, 0, 0], p2: [0, 0, 0, 0, 0, 0] },
                 stocks: [ 4, 4, 4, 4, 4, 5 ]
+                decks: JSON.parse(JSON.stringify(card_list)) // a : stuff, b: stuff, c : stuff, where stuff looks like [qwert, provides, points]
+                market: {}
             }
+            // initlai
         } else {
             // TODO(bowei): allow specifying username through /:game_id/:name endpoint!
             body += 'Game in progress. '
@@ -224,6 +229,8 @@ const main = (req, res) => {
         // DONT't swap turns when we fail a command
         if (game_state.whose_turn !== current_player) {
             body += 'It\'s not your turn!'
+        } else if (!game_state.players.p2) {
+            body += 'Needs at least 2 players!'
         } else {
             if (/^[QWERT-]{2,3}$/.test(command)) {
                 if (command.length === 2 && command[0] == command[1]) {
