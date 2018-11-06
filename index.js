@@ -221,18 +221,14 @@ const main = (req, res) => {
     // action commands, tricky stuff
     } else if (/^([QWERT-]{2,3}|([A-C][1-4]|X[1-3])|G[A-C][0-4])$/.test(command)) {
         let did_succeed_turn = true;
+        // DONT't swap turns when we fail a command
         if (game_state.whose_turn !== current_player) {
             body += 'It\'s not your turn!'
-            // DONT't swap turns
         } else {
             if (/^[QWERT-]{2,3}$/.test(command)) {
                 if (command.length === 2 && command[0] == command[1]) {
-                    // TODO(bowei): test if the pile is full!
-                    // TODO(bowei): test if your inventory is too full
                     let total = 0
-                    for (let i = 0; i < 6; i++) {
-                        total += game_state.inventory[current_player][i]
-                    }
+                    for (let i = 0; i < 6; i++) { total += game_state.inventory[current_player][i] }
                     if (command.replace('-','').length + total > 10) {
                         body += "Can't take that many jewels, inventory too full."
                         did_succeed_turn = false;
@@ -247,12 +243,8 @@ const main = (req, res) => {
                         }
                     }
                 } else if (command.length === 3 && !/([^-])\1/.test(command) && !/([^-]).\1/.test(command)) {
-                    // TODO(bowei): test if the piles are empty!
-                    // TODO(bowei): test if your inventory is too full
                     let total = 0
-                    for (let i = 0; i < 6; i++) {
-                        total += game_state.inventory[current_player][i]
-                    }
+                    for (let i = 0; i < 6; i++) { total += game_state.inventory[current_player][i] }
                     if (command.replace('-','').length + total > 10) {
                         body += "Can't take that many jewels, inventory too full."
                         did_succeed_turn = false;
@@ -268,8 +260,8 @@ const main = (req, res) => {
                             game_state.inventory[current_player][jewel_to_idx(command[0])] += 1;
                             game_state.stocks[jewel_to_idx(command[0])] -= 1;
                             game_state.inventory[current_player][jewel_to_idx(command[1])] += 1;
-                            game_state.inventory[current_player][jewel_to_idx(command[2])] += 1;
                             game_state.stocks[jewel_to_idx(command[1])] -= 1;
+                            game_state.inventory[current_player][jewel_to_idx(command[2])] += 1;
                             game_state.stocks[jewel_to_idx(command[2])] -= 1;
                         }
                     }
