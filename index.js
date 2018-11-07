@@ -69,6 +69,7 @@ const jewel_to_idx = (ch) => {
     return null;
 }
 const CARD_KEYS = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4']
+const MAX_VICTORY_POINTS = 15;
 
 const to_html_table = (rows) => {
     return '<table> ' + rows.map(row => '<tr> ' + row.map(x => `<th> ${x} </th>`).join(' ') + ' </tr> ').join(' ') + ' </table>'
