@@ -44,10 +44,10 @@ th, td {
 
 <div class="navbar">
 __MOBILE__: Enter command below: <br>
-__MOBILE__:<textarea rows="5" cols="30" name="command" form="myform" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+__MOBILE__:<textarea rows="5" cols="30" name="command" form="myform" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">__COMMAND__
 __MOBILE__:</textarea> <br>
 <form action="/__GAME_ID__" method="post" id="myform">
-  <input type="submit" value="Play">
+  <input type="submit" value="Play"> ` + /* TODO(bowei) make this button bigger) */ + `
 __DESKTOP__:<input type="text" name="command" value="__COMMAND__"><br>
 </form>
 </div>
